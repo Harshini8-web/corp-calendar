@@ -15,13 +15,11 @@ import { format } from 'date-fns';
 export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
   const { user } = useAuth();
   const [events, setEvents] = useState<any[]>([]);
-  const [venues, setVenues] = useState<any[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadEvents();
-    loadVenues();
   }, []);
 
   const loadEvents = async () => {
@@ -29,7 +27,6 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
       .from('events')
       .select(`
         *,
-        venue:venues(name, location),
         ticket_types(*)
       `)
       .order('start_ts', { ascending: false });
@@ -40,15 +37,6 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
     }
 
     setEvents(data || []);
-  };
-
-  const loadVenues = async () => {
-    const { data } = await supabase
-      .from('venues')
-      .select('*')
-      .order('name');
-
-    setVenues(data || []);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -71,27 +59,14 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
       return;
     }
 
-    // Check for conflicts
-    const { data: conflicts } = await supabase
-      .from('events')
-      .select('id, title, start_ts, end_ts')
-      .eq('venue_id', formData.get('venue_id') as string)
-      .eq('status', 'active')
-      .or(`and(start_ts.lte.${end_ts},end_ts.gte.${start_ts})`);
-
-    if (conflicts && conflicts.length > 0) {
-      toast.error(`Venue is already booked during this time by: ${conflicts[0].title}`);
-      setLoading(false);
-      return;
-    }
-
     try {
       const { data: event, error: eventError } = await supabase
         .from('events')
         .insert({
           title: formData.get('title') as string,
           description: formData.get('description') as string,
-          venue_id: formData.get('venue_id') as string,
+          venue_name: formData.get('venue_name') as string,
+          venue_location: formData.get('venue_location') as string || null,
           start_ts,
           end_ts,
           capacity: formData.get('capacity') ? parseInt(formData.get('capacity') as string) : null
@@ -188,19 +163,24 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="venue_id">Venue</Label>
-                <Select name="venue_id" required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a venue" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {venues.map((venue) => (
-                      <SelectItem key={venue.id} value={venue.id}>
-                        {venue.name} {venue.location && `- ${venue.location}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="venue_name">Venue Name</Label>
+                <Input
+                  id="venue_name"
+                  name="venue_name"
+                  required
+                  disabled={loading}
+                  placeholder="Main Conference Hall"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="venue_location">Venue Location (optional)</Label>
+                <Input
+                  id="venue_location"
+                  name="venue_location"
+                  disabled={loading}
+                  placeholder="Building A, Floor 3"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -293,10 +273,13 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                       <Calendar className="h-3 w-3" />
                       {format(new Date(event.start_ts), 'PPp')} - {format(new Date(event.end_ts), 'p')}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {event.venue?.name}
-                    </div>
+                    {event.venue_name && (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {event.venue_name}
+                        {event.venue_location && ` - ${event.venue_location}`}
+                      </div>
+                    )}
                     {event.capacity && (
                       <div className="flex items-center gap-1">
                         <Users className="h-3 w-3" />

@@ -24,9 +24,7 @@ export default function MyRegistrations() {
       .from('registrations')
       .select(`
         *,
-        event:events(*,
-          venue:venues(*)
-        ),
+        event:events(*),
         ticket_type:ticket_types(*)
       `)
       .eq('user_id', user?.id)
@@ -90,7 +88,8 @@ export default function MyRegistrations() {
                   </div>
                   <div className="flex items-center gap-1">
                     <MapPin className="h-3 w-3" />
-                    {reg.event?.venue?.name}
+                    {reg.event?.venue_name}
+                    {reg.event?.venue_location && ` - ${reg.event.venue_location}`}
                   </div>
                   <div className="flex items-center gap-1">
                     <Ticket className="h-3 w-3" />

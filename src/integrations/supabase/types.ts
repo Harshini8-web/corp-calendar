@@ -28,7 +28,9 @@ export type Database = {
           timezone: string
           title: string
           updated_at: string
-          venue_id: string
+          venue_id: string | null
+          venue_location: string | null
+          venue_name: string | null
         }
         Insert: {
           capacity?: number | null
@@ -43,7 +45,9 @@ export type Database = {
           timezone?: string
           title: string
           updated_at?: string
-          venue_id: string
+          venue_id?: string | null
+          venue_location?: string | null
+          venue_name?: string | null
         }
         Update: {
           capacity?: number | null
@@ -58,7 +62,9 @@ export type Database = {
           timezone?: string
           title?: string
           updated_at?: string
-          venue_id?: string
+          venue_id?: string | null
+          venue_location?: string | null
+          venue_name?: string | null
         }
         Relationships: [
           {

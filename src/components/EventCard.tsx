@@ -76,8 +76,8 @@ export default function EventCard({ event, onRegister }: EventCardProps) {
           </div>
           <div className="flex items-center gap-1">
             <MapPin className="h-3 w-3" />
-            {event.venue?.name}
-            {event.venue?.location && ` - ${event.venue.location}`}
+            {event.venue_name}
+            {event.venue_location && ` - ${event.venue_location}`}
           </div>
           {event.capacity && (
             <div className="flex items-center gap-1">

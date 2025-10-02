@@ -21,7 +21,6 @@ export default function ParticipantDashboard() {
         .from('events')
         .select(`
           *,
-          venue:venues(*),
           ticket_types(*)
         `)
         .eq('status', 'active')
