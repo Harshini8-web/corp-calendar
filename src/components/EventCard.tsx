@@ -119,7 +119,7 @@ export default function EventCard({ event, onRegister }: EventCardProps) {
                 onClick={() => handleRegister(ticket.id)}
                 disabled={registering}
               >
-                Register
+                {ticket.kind === 'paid' ? 'Buy Ticket' : 'Register'}
               </Button>
             </div>
           ))}

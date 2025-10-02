@@ -8,15 +8,24 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Calendar, MapPin, Users, Trash2 } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+
+type TicketType = {
+  name: string;
+  kind: 'free' | 'paid';
+  price: number;
+};
 
 export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
   const { user } = useAuth();
   const [events, setEvents] = useState<any[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([
+    { name: 'Standard', kind: 'free', price: 0 }
+  ]);
 
   useEffect(() => {
     loadEvents();
@@ -76,24 +85,23 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
 
       if (eventError) throw eventError;
 
-      // Create default ticket type
-      const ticketTypes = [
-        {
-          event_id: event.id,
-          name: 'Standard',
-          kind: 'free' as const,
-          price: 0
-        }
-      ];
+      // Create ticket types
+      const ticketTypesData = ticketTypes.map(tt => ({
+        event_id: event.id,
+        name: tt.name,
+        kind: tt.kind,
+        price: tt.price
+      }));
 
       const { error: ticketError } = await supabase
         .from('ticket_types')
-        .insert(ticketTypes);
+        .insert(ticketTypesData);
 
       if (ticketError) throw ticketError;
 
       toast.success('Event created successfully');
       setIsDialogOpen(false);
+      setTicketTypes([{ name: 'Standard', kind: 'free', price: 0 }]);
       loadEvents();
       onUpdate();
     } catch (error: any) {
@@ -135,7 +143,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
               Create Event
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create Event</DialogTitle>
               <DialogDescription>Schedule a new corporate event</DialogDescription>
@@ -241,6 +249,97 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                   disabled={loading}
                   placeholder="Leave empty to use venue capacity"
                 />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Ticket Types</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTicketTypes([...ticketTypes, { name: '', kind: 'free', price: 0 }])}
+                    disabled={loading}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Ticket Type
+                  </Button>
+                </div>
+                
+                <div className="space-y-2">
+                  {ticketTypes.map((ticket, index) => (
+                    <div key={index} className="flex gap-2 items-end p-3 border rounded-lg">
+                      <div className="flex-1 space-y-2">
+                        <Label htmlFor={`ticket-name-${index}`}>Name</Label>
+                        <Input
+                          id={`ticket-name-${index}`}
+                          value={ticket.name}
+                          onChange={(e) => {
+                            const newTickets = [...ticketTypes];
+                            newTickets[index].name = e.target.value;
+                            setTicketTypes(newTickets);
+                          }}
+                          placeholder="VIP, Early Bird, etc."
+                          required
+                          disabled={loading}
+                        />
+                      </div>
+                      
+                      <div className="w-32 space-y-2">
+                        <Label htmlFor={`ticket-kind-${index}`}>Type</Label>
+                        <Select
+                          value={ticket.kind}
+                          onValueChange={(value: 'free' | 'paid') => {
+                            const newTickets = [...ticketTypes];
+                            newTickets[index].kind = value;
+                            if (value === 'free') newTickets[index].price = 0;
+                            setTicketTypes(newTickets);
+                          }}
+                          disabled={loading}
+                        >
+                          <SelectTrigger id={`ticket-kind-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="free">Free</SelectItem>
+                            <SelectItem value="paid">Paid</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      {ticket.kind === 'paid' && (
+                        <div className="w-32 space-y-2">
+                          <Label htmlFor={`ticket-price-${index}`}>Price (₹)</Label>
+                          <Input
+                            id={`ticket-price-${index}`}
+                            type="number"
+                            min="1"
+                            value={ticket.price}
+                            onChange={(e) => {
+                              const newTickets = [...ticketTypes];
+                              newTickets[index].price = parseFloat(e.target.value) || 0;
+                              setTicketTypes(newTickets);
+                            }}
+                            required
+                            disabled={loading}
+                          />
+                        </div>
+                      )}
+                      
+                      {ticketTypes.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setTicketTypes(ticketTypes.filter((_, i) => i !== index))}
+                          disabled={loading}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="flex justify-end gap-2">
