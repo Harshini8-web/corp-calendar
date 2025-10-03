@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Calendar, MapPin, Users, Trash2, X } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, Trash2, X, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -23,6 +23,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
   const [events, setEvents] = useState<any[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<any>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([
     { name: 'Standard', kind: 'free', price: 0 }
   ]);
@@ -69,25 +70,48 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
     }
 
     try {
-      const { data: event, error: eventError } = await supabase
-        .from('events')
-        .insert({
-          title: formData.get('title') as string,
-          description: formData.get('description') as string,
-          venue_name: formData.get('venue_name') as string,
-          venue_location: formData.get('venue_location') as string || null,
-          start_ts,
-          end_ts,
-          capacity: formData.get('capacity') ? parseInt(formData.get('capacity') as string) : null
-        })
-        .select()
-        .single();
+      const eventData = {
+        title: formData.get('title') as string,
+        description: formData.get('description') as string,
+        venue_name: formData.get('venue_name') as string,
+        venue_location: formData.get('venue_location') as string || null,
+        start_ts,
+        end_ts,
+        capacity: formData.get('capacity') ? parseInt(formData.get('capacity') as string) : null
+      };
 
-      if (eventError) throw eventError;
+      let eventId: string;
+
+      if (editingEvent) {
+        // Update existing event
+        const { error: eventError } = await supabase
+          .from('events')
+          .update(eventData)
+          .eq('id', editingEvent.id);
+
+        if (eventError) throw eventError;
+        eventId = editingEvent.id;
+
+        // Delete old ticket types
+        await supabase
+          .from('ticket_types')
+          .delete()
+          .eq('event_id', editingEvent.id);
+      } else {
+        // Create new event
+        const { data: event, error: eventError } = await supabase
+          .from('events')
+          .insert(eventData)
+          .select()
+          .single();
+
+        if (eventError) throw eventError;
+        eventId = event.id;
+      }
 
       // Create ticket types
       const ticketTypesData = ticketTypes.map(tt => ({
-        event_id: event.id,
+        event_id: eventId,
         name: tt.name,
         kind: tt.kind,
         price: tt.price
@@ -99,8 +123,9 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
 
       if (ticketError) throw ticketError;
 
-      toast.success('Event created successfully');
+      toast.success(editingEvent ? 'Event updated successfully' : 'Event created successfully');
       setIsDialogOpen(false);
+      setEditingEvent(null);
       setTicketTypes([{ name: 'Standard', kind: 'free', price: 0 }]);
       loadEvents();
       onUpdate();
@@ -109,6 +134,12 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEdit = (event: any) => {
+    setEditingEvent(event);
+    setTicketTypes(event.ticket_types || [{ name: 'Standard', kind: 'free', price: 0 }]);
+    setIsDialogOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -136,7 +167,13 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
           <h2 className="text-2xl font-bold">Events</h2>
           <p className="text-muted-foreground">Create and manage corporate events</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) {
+            setEditingEvent(null);
+            setTicketTypes([{ name: 'Standard', kind: 'free', price: 0 }]);
+          }
+        }}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -145,8 +182,10 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Create Event</DialogTitle>
-              <DialogDescription>Schedule a new corporate event</DialogDescription>
+              <DialogTitle>{editingEvent ? 'Edit Event' : 'Create Event'}</DialogTitle>
+              <DialogDescription>
+                {editingEvent ? 'Update event details' : 'Schedule a new corporate event'}
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
@@ -157,6 +196,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                   required
                   disabled={loading}
                   placeholder="Annual Company Meeting"
+                  defaultValue={editingEvent?.title || ''}
                 />
               </div>
               
@@ -167,6 +207,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                   name="description"
                   disabled={loading}
                   placeholder="Event details and agenda..."
+                  defaultValue={editingEvent?.description || ''}
                 />
               </div>
 
@@ -178,6 +219,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                   required
                   disabled={loading}
                   placeholder="Main Conference Hall"
+                  defaultValue={editingEvent?.venue_name || ''}
                 />
               </div>
 
@@ -188,6 +230,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                   name="venue_location"
                   disabled={loading}
                   placeholder="Building A, Floor 3"
+                  defaultValue={editingEvent?.venue_location || ''}
                 />
               </div>
 
@@ -201,6 +244,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                     required
                     disabled={loading}
                     min={new Date().toISOString().split('T')[0]}
+                    defaultValue={editingEvent ? new Date(editingEvent.start_ts).toISOString().split('T')[0] : ''}
                   />
                 </div>
                 <div className="space-y-2">
@@ -211,6 +255,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                     type="time"
                     required
                     disabled={loading}
+                    defaultValue={editingEvent ? new Date(editingEvent.start_ts).toTimeString().slice(0, 5) : ''}
                   />
                 </div>
               </div>
@@ -225,6 +270,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                     required
                     disabled={loading}
                     min={new Date().toISOString().split('T')[0]}
+                    defaultValue={editingEvent ? new Date(editingEvent.end_ts).toISOString().split('T')[0] : ''}
                   />
                 </div>
                 <div className="space-y-2">
@@ -235,6 +281,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                     type="time"
                     required
                     disabled={loading}
+                    defaultValue={editingEvent ? new Date(editingEvent.end_ts).toTimeString().slice(0, 5) : ''}
                   />
                 </div>
               </div>
@@ -248,6 +295,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                   min="1"
                   disabled={loading}
                   placeholder="Leave empty to use venue capacity"
+                  defaultValue={editingEvent?.capacity || ''}
                 />
               </div>
 
@@ -352,7 +400,7 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={loading}>
-                  {loading ? 'Creating...' : 'Create Event'}
+                  {loading ? (editingEvent ? 'Updating...' : 'Creating...') : (editingEvent ? 'Update Event' : 'Create Event')}
                 </Button>
               </div>
             </form>
@@ -387,13 +435,22 @@ export default function EventManager({ onUpdate }: { onUpdate: () => void }) {
                     )}
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDelete(event.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleEdit(event)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDelete(event.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             {event.description && (
